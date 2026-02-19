@@ -7,7 +7,7 @@ st.set_page_config(
     page_title="AppLavanderia - Digital Workflow",
     page_icon="clothes",
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"
 )
 
 # Custom CSS per mobile optimization

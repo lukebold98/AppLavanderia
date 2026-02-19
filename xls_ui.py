@@ -223,28 +223,36 @@ def render_xls_workflow():
             height: 3.5rem !important;
         }
         
-        /* Checkbox più grandi per tap */
+        /* Checkbox stabili per mobile */
         .stCheckbox {
-            transform: scale(1.5);
-            margin-right: 1rem;
+            margin-bottom: 0px !important;
+        }
+        
+        /* Forza visibilità checkbox se il browser la nasconde */
+        .stCheckbox input {
+            width: 25px !important;
+            height: 25px !important;
+            cursor: pointer;
         }
         
         /* Card risultati con padding generoso */
         .result-card {
-            padding: 1rem;
-            margin: 0.5rem 0;
+            padding: 0.8rem;
+            margin: 0.4rem 0;
             border-radius: 0.5rem;
-            background: #f0f2f6;
+            background: #f8f9fa;
+            border-left: 5px solid #1f77b4;
         }
         
         /* Banner dipendente più visibile */
         .employee-banner {
-            background: linear-gradient(90deg, #1f77b4, #4dabf7);
+            background: #1f77b4;
             color: white;
-            padding: 1rem;
+            padding: 0.6rem 1rem;
             border-radius: 0.5rem;
-            margin: 1rem 0;
-            font-size: 1.1rem;
+            margin-top: 1.5rem;
+            margin-bottom: 0.5rem;
+            font-size: 1rem;
             font-weight: bold;
         }
         </style>
@@ -290,7 +298,7 @@ def render_xls_workflow():
             locker = employee_items[0].locker_number or "N/A"
             
             st.markdown(
-                f'<div class="employee-banner">👤 {employee_name} - 📍 Armadietto {locker}</div>',
+                f'<div class="employee-banner">👤 {employee_name} - 📍 {locker}</div>',
                 unsafe_allow_html=True
             )
             
@@ -300,15 +308,14 @@ def render_xls_workflow():
                 # ID univoco per checkbox (nome + codice + idx per gestire duplicati)
                 item_id = f"{item.employee_name}_{item.item_code}_{idx}"
                 
-                # Layout: checkbox grande a sinistra, testo a destra
-                col_check, col_text = st.columns([1, 5])
+                # Layout: checkbox a sinistra, testo a destra (colonne più larghe per mobile)
+                col_check, col_text = st.columns([1, 4])
                 
                 with col_check:
                     is_checked = st.checkbox(
-                        "OK",
+                        " ", # Label minima per rendere l'area cliccabile
                         value=item_id in st.session_state.checked_items,
-                        key=f"check_{item_id}",
-                        label_visibility="collapsed"
+                        key=f"check_{item_id}"
                     )
                     
                     # Aggiorna set dei checked items
@@ -318,16 +325,13 @@ def render_xls_workflow():
                         st.session_state.checked_items.discard(item_id)
                 
                 with col_text:
-                    # Mostra solo descrizione
                     display_text = f"{item.item_description}"
-                    
-                    # Se spuntato, mostra con strikethrough
                     if is_checked:
-                        st.markdown(f"~~{display_text}~~", help="Già consegnato")
+                        st.markdown(f"~~{display_text}~~")
                     else:
-                        st.markdown(display_text)
+                        st.markdown(f"**{display_text}**")
             
-            st.divider()  # Separatore tra dipendenti
+            st.write("") # Piccolo spazio finale per dipendente
     
     # ========================================================================
     # STEP 7: Email Text Area (Se attivato dalla sidebar)
