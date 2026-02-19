@@ -7,18 +7,8 @@ st.set_page_config(
     page_title="AppLavanderia - Digital Workflow",
     page_icon="clothes",
     layout="wide",
-    initial_sidebar_state="auto"
+    initial_sidebar_state="collapsed"
 )
-
-# Custom CSS per mobile optimization
-st.markdown("""
-    <style>
-    .stButton>button {
-        height: 3rem;
-        font-size: 1.2rem;
-    }
-    </style>
-""", unsafe_allow_html=True)
 
 # Main Workflow
 render_xls_workflow()
