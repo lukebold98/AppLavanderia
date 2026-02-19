@@ -1,64 +1,51 @@
-# Mobile-Optimized XLS Workflow Module
-# Versione 3.0: Extreme Mobile Compatibility (No Sidebar, No Columns)
-
 import streamlit as st
 from typing import List, Optional
 import sys
 from pathlib import Path
 from datetime import datetime
 import os
+import re
 
-# Import dei nostri moduli XLS
+# Import dei moduli interni
 sys.path.append(str(Path(__file__).parent))
 from Modules.EYES.unified_reader import UnifiedFileReader
 from Modules.EYES.xls_parser import XLSParser, DeliveryItem
 from Modules.BRAIN.search_controller import SearchController
 
-def render_xls_workflow():
-    st.title("🔍 Spunta Bolle")
-    st.markdown("*Ottimizzato per cellulare - Operatività Totale*")
+def sanitize_key(text: str) -> str:
+    """Rimuove caratteri speciali che possono rompere i widget di Streamlit."""
+    return re.sub(r'[^a-zA-Z0-9_]', '_', text)
 
-    # ========================================================================
-    # STEP 1: Upload File
-    # ========================================================================
+def render_xls_workflow():
+    st.title("🧺 Gestione Bolle Lavanderia")
+    
+    # --- STEP 1: CARICAMENTO ---
     uploaded_files = st.file_uploader(
-        "1️⃣ Carica Bolle (Excel, PDF, Immagini)",
-        type=["xlsx", "xls", "pdf", "jpg", "jpeg", "png"],
-        accept_multiple_files=True
+        "1. Carica le bolle (Excel o PDF)",
+        type=["xlsx", "xls", "pdf"],
+        accept_multiple_files=True,
+        key="main_uploader"
     )
     
     if not uploaded_files:
-        st.info("👆 Carica i file delle bolle per iniziare.")
+        st.warning("Carica un file per iniziare.")
         st.stop()
 
-    # ========================================================================
-    # STEP 2: Parsing & Session State
-    # ========================================================================
-    current_files_key = ",".join([f"{f.name}_{f.size}" for f in uploaded_files])
-    
-    if "xls_items" not in st.session_state or st.session_state.get("last_files_key") != current_files_key:
+    # --- DATI E STATO ---
+    files_id = ",".join([f"{f.name}_{f.size}" for f in uploaded_files])
+    if "xls_items" not in st.session_state or st.session_state.get("last_files_key") != files_id:
         all_items = []
-        errors = []
-        status_text = st.empty()
-        
-        for i, uploaded_file in enumerate(uploaded_files):
-            status_text.text(f"📖 Lettura {uploaded_file.name}...")
+        for f in uploaded_files:
             try:
                 reader = UnifiedFileReader()
-                df = reader.read_file(uploaded_file, filename=uploaded_file.name)
+                df = reader.read_file(f, filename=f.name)
                 parser = XLSParser(deduplicate=False)
-                items = parser.parse(df)
-                all_items.extend(items)
+                all_items.extend(parser.parse(df))
             except Exception as e:
-                errors.append(f"{uploaded_file.name}: {str(e)}")
-        
-        status_text.empty()
-        if errors:
-            with st.expander("⚠️ Errori caricamento"):
-                for err in errors: st.error(err)
+                st.error(f"Errore nel file {f.name}: {e}")
         
         st.session_state.xls_items = all_items
-        st.session_state.last_files_key = current_files_key
+        st.session_state.last_files_key = files_id
         st.session_state.search_controller = SearchController(all_items)
         if "checked_items" not in st.session_state:
             st.session_state.checked_items = set()
@@ -68,124 +55,72 @@ def render_xls_workflow():
     stats = controller.get_stats()
     total_checked = len(st.session_state.checked_items)
 
-    # ========================================================================
-    # STEP 3: CENTRO REPORT (Spostato dalla Sidebar alla Pagina Principale)
-    # ========================================================================
-    with st.expander("📊 2️⃣ CENTRO REPORT & DOWNLOAD", expanded=False):
-        progress_pct = int((total_checked / stats["total_items"]) * 100) if stats["total_items"] > 0 else 0
-        st.write(f"📊 **Progresso: {total_checked} / {stats['total_items']} ({progress_pct}%)**")
-        st.progress(progress_pct / 100)
+    # --- STEP 2: REPORT (Sempre visibile in alto) ---
+    st.header("📊 Centro Report")
+    with st.container():
+        st.write(f"**Progresso: {total_checked} su {stats['total_items']}**")
+        st.progress(total_checked / stats["total_items"] if stats["total_items"] > 0 else 0)
         
         if st.button("🚀 GENERA REPORT FINALE", type="primary", use_container_width=True):
             from Modules.EYES.report_generator import ReportGenerator
             gen = ReportGenerator(items, st.session_state.checked_items)
             os.makedirs("temp/reports", exist_ok=True)
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M")
-            pdf_path = f"temp/reports/Report_{timestamp}.pdf"
+            ts = datetime.now().strftime("%H%M")
+            pdf_path = f"temp/reports/Report_{ts}.pdf"
+            xls_path = f"temp/reports/Report_{ts}.xlsx"
             try:
                 gen.generate_pdf(pdf_path)
-                xls_path = f"temp/reports/Report_{timestamp}.xlsx"
                 gen.generate_excel(xls_path)
                 st.session_state.last_report = {"pdf": pdf_path, "xls": xls_path, "text": gen.generate_email_text()}
                 st.success("✅ Report PRONTI!")
             except Exception as e:
-                st.error(f"❌ Errore: {str(e)}")
+                st.error(f"Errore: {e}")
 
         if "last_report" in st.session_state:
             rep = st.session_state.last_report
             with open(rep["pdf"], "rb") as f:
-                st.download_button("📄 SCARICA PDF", data=f, file_name=os.path.basename(rep["pdf"]), use_container_width=True)
-            with open(rep["xls"], "rb") as f:
-                st.download_button("📊 SCARICA EXCEL", data=f, file_name=os.path.basename(rep["xls"]), use_container_width=True)
-            if st.button("📧 MOSTRA TESTO EMAIL", use_container_width=True):
-                st.session_state.show_email_text = not st.session_state.get("show_email_text", False)
-            if st.session_state.get("show_email_text"):
-                st.text_area("Copia testo email", value=rep["text"], height=200)
-
-        st.divider()
-        if st.button("🔄 RESET TUTTE LE SPUNTE", use_container_width=True):
+                st.download_button("📄 Scarica PDF", f, os.path.basename(rep["pdf"]), use_container_width=True)
+            if st.button("📧 Mostra Testo Email", use_container_width=True):
+                st.session_state.show_email = not st.session_state.get("show_email", False)
+            if st.session_state.get("show_email"):
+                st.text_area("Copia testo", rep["text"], height=150)
+        
+        if st.button("🔄 Reset tutto", use_container_width=True):
             st.session_state.checked_items = set()
-            if "last_report" in st.session_state: del st.session_state.last_report
             st.rerun()
 
-    # ========================================================================
-    # STEP 4: RICERCA E LISTA
-    # ========================================================================
-    st.write("")
-    search_query = st.text_input(
-        "3️⃣ Cerca Armadietto o Nome",
-        placeholder="Es: 19 o VILLA",
-        key="search_input"
-    )
+    st.divider()
 
-    # CSS CSS per rendere tutto gigante e visibile
-    st.markdown("""
-        <style>
-        /* Checkbox GIGANTI e Testo GIGANTE */
-        .stCheckbox label p {
-            font-size: 1.3rem !important;
-            font-weight: bold !important;
-            padding: 10px 0 !important;
-        }
-        /* Spazio extra per il tocco */
-        .stCheckbox {
-            padding: 15px 10px !important;
-            background: #f8f9fa;
-            border-bottom: 2px solid #dee2e6;
-            margin-bottom: 5px !important;
-        }
-        /* Banner dipendente chiaro */
-        .employee-banner {
-            background: #1f77b4;
-            color: white;
-            padding: 10px;
-            border-radius: 5px;
-            margin: 20px 0 10px 0;
-            font-weight: bold;
-            font-size: 1.1rem;
-        }
-        </style>
-    """, unsafe_allow_html=True)
+    # --- STEP 3: RICERCA ---
+    st.header("🔍 Lista e Ricerca")
+    query = st.text_input("Cerca nome o armadietto", placeholder="Esempio: 19")
 
-    # Filtro risultati
-    if search_query:
-        result = controller.search(search_query)
-        display_items = result.items
-    else:
-        display_items = items
-
-    # Rendering Lista
-    if display_items:
-        grouped = {}
-        for item in display_items:
-            if item.employee_name not in grouped: grouped[item.employee_name] = []
-            grouped[item.employee_name].append(item)
-
-        for employee, emp_items in grouped.items():
-            locker = emp_items[0].locker_number or "N/A"
-            st.markdown(f'<div class="employee-banner">👤 {employee} - 📍 {locker}</div>', unsafe_allow_html=True)
+    # --- STEP 4: VISUALIZZAZIONE ---
+    active_items = controller.search(query).items if query else items
+    
+    if active_items:
+        current_employee = ""
+        for idx, item in enumerate(active_items):
+            # Header dipendente (senza HTML)
+            if item.employee_name != current_employee:
+                current_employee = item.employee_name
+                st.markdown(f"### 👤 {current_employee} (Arm. {item.locker_number or '?'})")
             
-            for idx, item in enumerate(emp_items):
-                item_id = f"{item.employee_name}_{item.item_code}_{idx}"
-                
-                # Checkbox con etichetta integrata (Massima stabilità)
-                desc = item.item_description
-                if item_id in st.session_state.checked_items:
-                    label = f"✅ ~~{desc}~~"
-                else:
-                    label = f"⬜ **{desc}**"
-                
-                is_checked = st.checkbox(
-                    label,
-                    value=item_id in st.session_state.checked_items,
-                    key=f"check_{item_id}"
-                )
-                
-                if is_checked: st.session_state.checked_items.add(item_id)
-                else: st.session_state.checked_items.discard(item_id)
-
-    st.write(f"\n*Statistiche: {total_checked}/{stats['total_items']} capi spuntati*")
+            # Checkbox Standard
+            item_key = sanitize_key(f"chk_{item.employee_name}_{idx}")
+            is_done = item_key in st.session_state.checked_items
+            
+            # La label contiene tutto il testo, così l'area cliccabile è grande
+            label = f"{item.item_description}"
+            if is_done:
+                label = f"✅ {label} (OK)"
+            
+            check = st.checkbox(label, value=is_done, key=item_key)
+            
+            if check: st.session_state.checked_items.add(item_key)
+            else: st.session_state.checked_items.discard(item_key)
+    else:
+        st.info("Nessun articolo trovato.")
 
 if __name__ == "__main__":
-    st.set_page_config(layout="centered")
     render_xls_workflow()

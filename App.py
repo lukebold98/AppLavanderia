@@ -6,8 +6,8 @@ from xls_ui import render_xls_workflow
 st.set_page_config(
     page_title="AppLavanderia - Digital Workflow",
     page_icon="clothes",
-    layout="centered",
-    initial_sidebar_state="collapsed"
+    layout="wide",
+    initial_sidebar_state="auto"
 )
 
 # Custom CSS per mobile optimization
