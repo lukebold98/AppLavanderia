@@ -47,11 +47,17 @@ def render_xls_workflow():
 
     # 2. CENTRO REPORT (In primo piano)
     with st.expander("📊 OPERAZIONI E REPORT", expanded=True):
+        # Sincronizza lo stato delle checkbox dai widget reali di Streamlit
+        # Questo garantisce che il report sia sempre aggiornato all'ultimo click
+        current_checked = {k for k, v in st.session_state.items() if str(k).startswith("v4_") and v is True}
+        st.session_state.checked_items = current_checked
+        
         st.write(f"✅ **Spuntati: {len(st.session_state.checked_items)} / {stats['total_items']} capi**")
         st.progress(len(st.session_state.checked_items) / stats["total_items"] if stats["total_items"] > 0 else 0)
         
         if st.button("🚀 GENERA REPORT FINALE", use_container_width=True, type="primary"):
             from Modules.EYES.report_generator import ReportGenerator
+            # Passa il set sincronizzato
             gen = ReportGenerator(st.session_state.xls_items, st.session_state.checked_items)
             os.makedirs("temp/reports", exist_ok=True)
             path = f"temp/reports/rep_{datetime.now().strftime('%H%M')}.pdf"
