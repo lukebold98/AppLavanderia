@@ -71,20 +71,25 @@ def render_xls_workflow():
     st.divider()
     query = st.text_input("🔍 Cerca Armadietto o Nome", placeholder="Es: 19 o VILLA")
     
-    # 4. LISTA (Checkbox 100% Standard)
-    items_to_show = controller.search(query).items if query else st.session_state.xls_items
+    # 4. LISTA (Checkbox 100% Standard con indici stabili)
+    all_items = st.session_state.xls_items
+    
+    # Filtriamo mantenendo l'indice originale per chiavi stabili
+    items_with_indices = []
+    for i, item in enumerate(all_items):
+        if not query or query.upper() in item.employee_name.upper() or query in (item.locker_number or ""):
+            items_with_indices.append((i, item))
     
     curr_emp = ""
-    for idx, item in enumerate(items_to_show):
+    for original_idx, item in items_with_indices:
         if item.employee_name != curr_emp:
             curr_emp = item.employee_name
             st.subheader(f"👤 {curr_emp} (Arm. {item.locker_number or '?'})")
         
-        # Chiave univoca pulita
-        safe_name = "".join(filter(str.isalnum, item.employee_name))
-        key_v4 = f"v4_{safe_name}_{idx}"
+        # Chiave univoca STABILE basata sull'indice assoluto
+        key_v4 = f"v4_{original_idx}"
         
-        # Checkbox nativa: l'intera riga è l'etichetta
+        # Checkbox nativa
         checked = st.checkbox(
             f"{item.item_description}", 
             value=key_v4 in st.session_state.checked_items, 
