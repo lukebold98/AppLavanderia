@@ -17,8 +17,9 @@ DIPENDENZE:
 
 import pandas as pd
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Union, IO
 import logging
+from io import BytesIO
 
 # Setup logging per debug (vedremo messaggi chiari se qualcosa va storto)
 logging.basicConfig(level=logging.INFO)
@@ -76,47 +77,29 @@ class XLSReader:
         logger.info("XLSReader inizializzato con successo")
     
     
-    def read_file(self, file_path: str) -> pd.DataFrame:
+    def read_file(self, file_source: Union[str, Path, IO]) -> pd.DataFrame:
         """
-        Legge un file Excel e restituisce un DataFrame pandas.
+        Legge un file Excel (da path o buffer) e restituisce un DataFrame pandas.
         
         Args:
-            file_path (str): Percorso al file Excel (relativo o assoluto)
-            
-        Returns:
-            pd.DataFrame: DataFrame con colonne standardizzate
-            
-        Raises:
-            ExcelReaderError: Se il file non esiste, è corrotto, o mancano colonne
-        
-        Step-by-step process:
-        1. Controlla che il file esista
-        2. Legge il file con pandas
-        3. Valida presenza colonne obbligatorie
-        4. Standardizza nomi colonne
-        5. Ritorna DataFrame pulito
+            file_source: Percorso al file o oggetto file-like (BytesIO)
         """
-        
-        # STEP 1: Validazione path
-        file_path_obj = Path(file_path)
-        
-        if not file_path_obj.exists():
-            raise ExcelReaderError(
-                f"File non trovato: {file_path}\n"
-                f"Assicurati che il percorso sia corretto."
-            )
+        # STEP 1: Validazione sorgente
+        if isinstance(file_source, (str, Path)):
+            file_path_obj = Path(file_source)
+            if not file_path_obj.exists():
+                raise ExcelReaderError(f"File non trovato: {file_source}")
+            read_source = file_source
+        else:
+            # È un buffer (es. caricato da Streamlit)
+            read_source = file_source
+            file_path_obj = None
         
         # STEP 2: Lettura Excel
         try:
-            logger.info(f"Lettura file: {file_path}")
-            
-            # pd.read_excel() fa il lavoro pesante:
-            # - Riconosce automaticamente formato (.xlsx vs .xls)
-            # - Usa openpyxl come engine per .xlsx
-            # - Converte celle in tipi Python appropriati (int, str, date, etc.)
-            df = pd.read_excel(file_path, engine='openpyxl')
-            
-            logger.info(f"File letto con successo: {len(df)} righe, {len(df.columns)} colonne")
+            # Per i buffer, pd.read_excel funziona direttamente
+            df = pd.read_excel(read_source, engine='openpyxl')
+            logger.info(f"Dati letti: {len(df)} righe")
             
         except Exception as e:
             # Catturiamo errori generici e li ri-lanciamo come ExcelReaderError

@@ -17,8 +17,9 @@ STRATEGIA:
 
 import pandas as pd
 from pathlib import Path
-from typing import Optional, Union
+from typing import Optional, Union, IO, Any
 import logging
+from io import BytesIO
 
 # PDF support
 try:
@@ -67,79 +68,66 @@ class UnifiedFileReader:
 
     
     
-    def read_file(self, file_path: Union[str, Path]) -> pd.DataFrame:
+    def read_file(self, file_source: Union[str, Path, IO], filename: Optional[str] = None) -> pd.DataFrame:
         """
         Legge file e ritorna DataFrame standardizzato.
         
         Args:
-            file_path: Path al file (Excel, PDF, o immagine)
-        
-        Returns:
-            DataFrame con colonne: arm, nome, codice, descrizione
-        
-        Raises:
-            ValueError: Se formato non supportato o lettura fallisce
-        
-        Process:
-        1. Determina tipo file da estensione
-        2. Usa metodo appropriato
-        3. Fallback su OCR se necessario
+            file_source: Path al file o oggetto file-like
+            filename: Nome del file (necessario se file_source è un buffer per dedurre il tipo)
         """
         
-        path = Path(file_path)
+        # Determina estensione
+        if isinstance(file_source, (str, Path)):
+            path = Path(file_source)
+            if not path.exists():
+                raise ValueError(f"File non trovato: {file_source}")
+            extension = path.suffix.lower()
+            name = path.name
+        else:
+            # È un buffer
+            if not filename:
+                raise ValueError("filename necessario quando si usa un buffer")
+            extension = Path(filename).suffix.lower()
+            name = filename
         
-        if not path.exists():
-            raise ValueError(f"File non trovato: {file_path}")
-        
-        extension = path.suffix.lower()
-        
-        logger.info(f"Lettura file: {path.name} (tipo: {extension})")
+        logger.info(f"Lettura file: {name} (tipo: {extension})")
         
         # ===== EXCEL =====
         if extension in self.EXCEL_EXTENSIONS:
-            return self._read_excel(path)
+            return self._read_excel(file_source)
         
         # ===== PDF =====
         elif extension in self.PDF_EXTENSIONS:
-            return self._read_pdf(path)
+            return self._read_pdf(file_source)
         
         # ===== IMMAGINI =====
         elif extension in self.IMAGE_EXTENSIONS:
-            return self._read_image_ocr(path)
+            return self._read_image_ocr(file_source)
         
         else:
-            raise ValueError(
-                f"Formato '{extension}' non supportato.\n"
-                f"Formati accettati: {self.EXCEL_EXTENSIONS | self.PDF_EXTENSIONS | self.IMAGE_EXTENSIONS}"
-            )
+            raise ValueError(f"Formato '{extension}' non supportato.")
     
     
-    def _read_excel(self, path: Path) -> pd.DataFrame:
-        """Legge file Excel."""
+    def _read_excel(self, source: Any) -> pd.DataFrame:
+        """Legge file Excel da path o buffer."""
         try:
-            df = self.xls_reader.read_file(str(path))
-            logger.info(f"Excel letto con successo: {len(df)} righe")
+            # Passiamo la sorgente così com'è (XLSReader ora gestisce entrambi)
+            df = self.xls_reader.read_file(source)
+            logger.info("Excel letto con successo")
             return df
         except Exception as e:
             raise ValueError(f"Errore lettura Excel: {e}")
     
     
-    def _read_pdf(self, path: Path) -> pd.DataFrame:
-        """
-        Legge PDF, prova prima estrazione tabella, poi OCR.
-        
-        Strategy:
-        1. Se pdfplumber disponibile → prova estrazione tabelle
-        2. Se estrazione tabelle fallisce → OCR con Mindee
-        3. Se OCR non disponibile → errore
-        """
+    def _read_pdf(self, source: Any) -> pd.DataFrame:
+        """Legge PDF, prova prima estrazione tabella, poi OCR."""
         
         # STEP 1: Prova estrazione tabella (PDF nativo)
         if PDF_SUPPORT:
             try:
-                df = self._extract_pdf_table(path)
+                df = self._extract_pdf_table(source)
                 if df is not None and len(df) > 0:
-                    logger.info(f"PDF tabella estratta: {len(df)} righe")
                     return df
                 else:
                     logger.warning("Estrazione tabella PDF vuota, provo OCR...")
@@ -149,7 +137,7 @@ class UnifiedFileReader:
         # STEP 2: Fallback OCR (PDF scannerizzato)
         if self.ocr_available:
             logger.info("Usando OCR Mindee per PDF...")
-            return self._read_image_ocr(path)
+            return self._read_image_ocr(source)
         else:
             raise ValueError(
                 "PDF non leggibile come tabella e OCR non disponibile.\n"
@@ -157,23 +145,16 @@ class UnifiedFileReader:
             )
     
     
-    def _extract_pdf_table(self, path: Path) -> Optional[pd.DataFrame]:
+    def _extract_pdf_table(self, source: Any) -> Optional[pd.DataFrame]:
         """
         Estrae tabella da PDF nativo usando pdfplumber.
-        
-        Args:
-            path: Path al PDF
-        
-        Returns:
-            DataFrame se trova tabelle, None altrimenti
         """
-        
         if not PDF_SUPPORT:
             return None
         
         all_tables = []
         
-        with pdfplumber.open(path) as pdf:
+        with pdfplumber.open(source) as pdf:
             for page_num, page in enumerate(pdf.pages, 1):
                 
                 # Estrai tabelle da questa pagina

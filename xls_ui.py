@@ -65,20 +65,12 @@ def render_xls_workflow():
         status_text = st.empty()
         
         for i, uploaded_file in enumerate(uploaded_files):
-            file_ext = Path(uploaded_file.name).suffix.lower()
             status_text.text(f"📖 Elaborazione file {i+1}/{len(uploaded_files)}: {uploaded_file.name}...")
             
             try:
-                # Salva temporaneamente il file
-                temp_path = Path("temp/uploads") / uploaded_file.name
-                temp_path.parent.mkdir(parents=True, exist_ok=True)
-                
-                with open(temp_path, "wb") as f:
-                    f.write(uploaded_file.getbuffer())
-                
-                # Leggi con unified reader
+                # Leggi con unified reader DIRETTAMENTE DAL BUFFER (no disk!)
                 reader = UnifiedFileReader()
-                df = reader.read_file(str(temp_path))
+                df = reader.read_file(uploaded_file, filename=uploaded_file.name)
                 
                 parser = XLSParser(deduplicate=False)
                 items = parser.parse(df)
