@@ -38,6 +38,7 @@ class DeliveryItem:
     item_code: str = ""             # Codice articolo (opzionale)
     quantity: int = 1               # Quantità (default 1)
     locker_number: Optional[str] = None  # Numero armadietto (es. "19")
+    uid: str = ""                   # ID univoco per session state (generato dal parser)
 
 
 class ParserError(Exception):
@@ -118,13 +119,19 @@ class XLSParser:
                 if not curr_desc:
                     continue
                 
+                # Genera UID univoco basato sul contenuto e l'indice per stabilità
+                import hashlib
+                raw_id = f"{last_name}_{curr_desc}_{last_arm}_{idx}"
+                uid = hashlib.md5(raw_id.encode()).hexdigest()[:12]
+
                 # Crea l'oggetto con i dati (reali o propagati)
                 item = DeliveryItem(
                     employee_name=last_name,
                     item_description=curr_desc,
                     item_code=str(row.get('codice', '')).strip(),
                     quantity=1,
-                    locker_number=last_arm
+                    locker_number=last_arm,
+                    uid=uid
                 )
                 
                 # Validazione finale dell'item: deve avere un nome credibile (non "SCONOSCIUTO" e non troppo corto)

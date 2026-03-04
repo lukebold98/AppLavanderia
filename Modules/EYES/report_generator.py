@@ -62,9 +62,9 @@ class ReportGenerator:
         
         # Mappa items con stato
         self.enriched_items = []
-        for idx, item in enumerate(items):
-            # Ricostruisce ID usato nell'UI (v4 stabile)
-            item_id = f"v4_{idx}"
+        for item in items:
+            # Usa l'UID stabile generato dal parser (v5+)
+            item_id = item.uid
             is_checked = item_id in checked_ids
             
             self.enriched_items.append({
