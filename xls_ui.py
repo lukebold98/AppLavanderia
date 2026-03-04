@@ -20,7 +20,38 @@ def toggle_item_callback(item_uid):
 
 @st.fragment
 def render_search_and_list(all_items):
-    """Renderizza la barra di ricerca e la lista articoli in un frammento isolato."""
+    """Renderizza statistiche, ricerca e lista in un frammento isolato per velocità."""
+    
+    # 2. STATISTICHE (Ora dentro il fragment per essere reattivo)
+    checked_items = st.session_state.checked_items
+    total_count = len(all_items)
+    
+    with st.expander("📊 STATISTICHE E REPORT", expanded=True):
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            st.write(f"✅ **Spuntati: {len(checked_items)} / {total_count} capi**")
+            progress = len(checked_items) / total_count if total_count > 0 else 0
+            st.progress(progress)
+        
+        with col2:
+            if st.button("🔄 Reset Totale", use_container_width=True):
+                st.session_state.checked_items = set()
+                st.rerun()
+
+        st.divider()
+        
+        if st.button("🚀 GENERA REPORT FINALE (PDF)", use_container_width=True, type="primary"):
+            os.makedirs("temp/reports", exist_ok=True)
+            path = f"temp/reports/rep_{datetime.now().strftime('%H%M')}.pdf"
+            gen = ReportGenerator(all_items, checked_items)
+            gen.generate_pdf(path)
+            st.session_state.last_rep_v5 = path
+            st.success("Report Generato!")
+
+        if "last_rep_v5" in st.session_state:
+            with open(st.session_state.last_rep_v5, "rb") as f:
+                st.download_button("📄 SCARICA PDF", f, file_name="Report_Lavanderia.pdf", use_container_width=True)
+
     st.divider()
     
     # 3. RICERCA
@@ -32,10 +63,6 @@ def render_search_and_list(all_items):
         if not query or query.upper() in item.employee_name.upper() or query in (item.locker_number or ""):
             filtered_items.append(item)
     
-    # Contatore veloce per il frammento
-    checked_count = len(st.session_state.checked_items)
-    st.caption(f"📍 Selezione attuale: {checked_count} capi spuntati")
-
     # 4. LISTA
     curr_emp = ""
     for item in filtered_items:
@@ -55,11 +82,11 @@ def render_search_and_list(all_items):
             args=(item_uid,)
         )
 
-# Versione Ultra-Performante (v5.0)
+# Versione Ultra-Performante (v5.1)
 def render_xls_workflow():
     # TITOLO CON VERSIONE
-    st.title("🧺 Gestione Bolle v5.0")
-    st.info("💡 Se non vedi 'v5.0' in alto, ricarica la pagina. Questa versione è ottimizzata per la velocità.")
+    st.title("🧺 Gestione Bolle v5.1")
+    st.info("💡 Se non vedi 'v5.1' in alto, ricarica la pagina. Questa versione corregge il contatore in tempo reale.")
 
     # 1. CARICAMENTO
     uploaded_files = st.file_uploader("📂 Carica Bolla (PDF o Excel)", type=["pdf", "xlsx", "xls"], accept_multiple_files=True, key="uploader_v5")
@@ -93,37 +120,8 @@ def render_xls_workflow():
             st.session_state.checked_items = set()
 
     all_items = st.session_state.xls_items
-    total_count = len(all_items)
-    checked_items = st.session_state.checked_items
 
-    # 2. CENTRO REPORT
-    with st.expander("📊 STATISTICHE E REPORT", expanded=True):
-        col1, col2 = st.columns([2, 1])
-        with col1:
-            st.write(f"✅ **Spuntati: {len(checked_items)} / {total_count} capi**")
-            progress = len(checked_items) / total_count if total_count > 0 else 0
-            st.progress(progress)
-        
-        with col2:
-            if st.button("🔄 Reset Totale", use_container_width=True):
-                st.session_state.checked_items = set()
-                st.rerun()
-
-        st.divider()
-        
-        if st.button("🚀 GENERA REPORT FINALE (PDF)", use_container_width=True, type="primary"):
-            os.makedirs("temp/reports", exist_ok=True)
-            path = f"temp/reports/rep_{datetime.now().strftime('%H%M')}.pdf"
-            gen = ReportGenerator(all_items, checked_items)
-            gen.generate_pdf(path)
-            st.session_state.last_rep_v5 = path
-            st.success("Report Generato!")
-
-        if "last_rep_v5" in st.session_state:
-            with open(st.session_state.last_rep_v5, "rb") as f:
-                st.download_button("📄 SCARICA PDF", f, file_name="Report_Lavanderia.pdf", use_container_width=True)
-
-    # 3 & 4. RICERCA E LISTA (Frammento isolato)
+    # 2, 3 & 4. TUTTO NEL FRAGMENT REATTIVO
     render_search_and_list(all_items)
 
 if __name__ == "__main__":
